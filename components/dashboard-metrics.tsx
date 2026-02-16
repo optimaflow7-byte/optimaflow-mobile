@@ -14,10 +14,10 @@ export function DashboardMetrics({ metrics }: DashboardMetricsProps) {
     const colors = useColors();
 
     const statusConfig: Record<string, { label: string; color: string; bgColor: string }> = {
-        contactado: { label: "Contactado", color: "#0A7EA4", bgColor: "#E0F2FE" },
-        en_progreso: { label: "En Progreso", color: "#F59E0B", bgColor: "#FEF3C7" },
-        cerrado: { label: "Cerrado", color: "#22C55E", bgColor: "#DCFCE7" },
-        perdido: { label: "Perdido", color: "#EF4444", bgColor: "#FEE2E2" },
+        contactado: { label: "Contactado", color: colors.primary, bgColor: colors.primary + "25" },
+        en_progreso: { label: "En Progreso", color: colors.warning, bgColor: colors.warning + "25" },
+        cerrado: { label: "Cerrado", color: colors.success, bgColor: colors.success + "25" },
+        perdido: { label: "Perdido", color: colors.error, bgColor: colors.error + "25" },
     };
 
     // Calculate generic stats

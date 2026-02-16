@@ -39,6 +39,10 @@ export function getApiBaseUrl(): string {
   if (ReactNative.Platform.OS === "web" && typeof window !== "undefined" && window.location) {
     const { protocol, hostname } = window.location;
     // Pattern: 8081-sandboxid.region.domain -> 3000-sandboxid.region.domain
+    // Also handle localhost explicitly
+    if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) {
+      return `${protocol}//${hostname.split(':')[0]}:3000`;
+    }
     const apiHostname = hostname.replace(/^8081-/, "3000-");
     if (apiHostname !== hostname) {
       return `${protocol}//${apiHostname}`;

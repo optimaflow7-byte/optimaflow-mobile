@@ -19,16 +19,18 @@ interface Opportunity {
   createdAt: string;
 }
 
-const statusConfig = {
-  contactado: { label: "Contactado", color: "#0A7EA4", bgColor: "#E0F2FE" },
-  en_progreso: { label: "En Progreso", color: "#F59E0B", bgColor: "#FEF3C7" },
-  cerrado: { label: "Cerrado", color: "#22C55E", bgColor: "#DCFCE7" },
-  perdido: { label: "Perdido", color: "#EF4444", bgColor: "#FEE2E2" },
-};
+
 
 export default function OpportunitiesScreen() {
   const router = useRouter();
   const colors = useColors();
+
+  const statusConfig = {
+    contactado: { label: "Contactado", color: colors.primary, bgColor: colors.primary + "25" },
+    en_progreso: { label: "En Progreso", color: colors.warning, bgColor: colors.warning + "25" },
+    cerrado: { label: "Cerrado", color: colors.success, bgColor: colors.success + "25" },
+    perdido: { label: "Perdido", color: colors.error, bgColor: colors.error + "25" },
+  };
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"todas" | "contactado" | "en_progreso" | "cerrado" | "perdido">("todas");

@@ -31,7 +31,7 @@
 
 - [x] Test all user flows end-to-end
 - [x] Verify haptic feedback on interactions
-- [ ] Test dark mode
+- [x] Test dark mode
 - [ ] Verify accessibility (contrast, touch targets)
 - [ ] Test on iOS and Android (Expo Go)
 

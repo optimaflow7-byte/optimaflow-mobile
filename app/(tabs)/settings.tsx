@@ -25,7 +25,9 @@ export default function SettingsScreen() {
     };
 
     const handleToggleTheme = async () => {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        if (Platform.OS !== 'web') {
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
         toggleColorScheme();
     };
 
@@ -84,7 +86,7 @@ export default function SettingsScreen() {
                 onPress={type === "switch" ? undefined : onPress}
                 style={({ pressed }) => ({
                     opacity: pressed && type !== "switch" ? 0.7 : 1,
-                    backgroundColor: pressed && type !== "switch" ? colors.secondary : 'transparent'
+                    backgroundColor: pressed && type !== "switch" ? colors.background : 'transparent'
                 })}
                 className={`flex-row items-center p-4 ${!isLast ? "border-b border-border" : ""}`}
             >
@@ -176,7 +178,17 @@ export default function SettingsScreen() {
                     <SettingItem icon="questionmark.circle.fill" label="Ayuda y Soporte" onPress={() => { }} />
                     <SettingItem icon="star.fill" label="Calificar Aplicación" onPress={() => { }} />
                     <SettingItem icon="doc.text.fill" label="Términos y Privacidad" onPress={() => { }} />
-                    <SettingItem icon="info.circle.fill" label="Versión" value="1.0.0" type="text" isLast onPress={() => { }} />
+                    <SettingItem icon="info.circle.fill" label="Versión" value="1.0.0" type="text" onPress={() => { }} />
+                </SettingSection>
+
+                {/* Developer Tools (Hidden in prod ideally, or visible for admin) */}
+                <SettingSection title="Herramientas Admin">
+                    <SettingItem
+                        icon="sparkles"
+                        label="Importar Leads (IA)"
+                        onPress={() => router.push("/dev/import-leads")}
+                        isLast
+                    />
                 </SettingSection>
 
                 {/* Danger Zone */}

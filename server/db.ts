@@ -1,6 +1,7 @@
 import { eq, desc, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, opportunities, activities, InsertOpportunity, InsertActivity } from "../drizzle/schema";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import { InsertUser, users, opportunities, activities, InsertOpportunity, InsertActivity, dealerships, InsertDealership, europeanDealerships } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -9,7 +10,8 @@ let _db: ReturnType<typeof drizzle> | null = null;
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      const client = postgres(process.env.DATABASE_URL, { prepare: false });
+      _db = drizzle(client);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -68,7 +70,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
+    await db.insert(users).values(values).onConflictDoUpdate({
+      target: users.openId,
       set: updateSet,
     });
   } catch (error) {
@@ -93,8 +96,8 @@ export async function getUserByOpenId(openId: string) {
 export async function createOpportunity(data: InsertOpportunity) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(opportunities).values(data);
-  return result[0]?.insertId || 0;
+  const result = await db.insert(opportunities).values(data).returning({ insertedId: opportunities.id });
+  return result[0]?.insertedId || 0;
 }
 
 export async function getUserOpportunities(userId: number) {
@@ -161,9 +164,9 @@ export async function getOpportunityMetrics(userId: number) {
 export async function createActivity(data: InsertActivity) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(activities).values(data);
+  const result = await db.insert(activities).values(data).returning({ insertedId: activities.id });
   await updateOpportunity(data.opportunityId, { lastActivityDate: new Date() });
-  return result[0]?.insertId || 0;
+  return result[0]?.insertedId || 0;
 }
 
 export async function getOpportunityActivities(opportunityId: number) {
@@ -181,3 +184,103 @@ export async function deleteActivity(id: number) {
   if (!db) throw new Error("Database not available");
   await db.delete(activities).where(eq(activities.id, id));
 }
+
+// Concesionarios (Dealerships)
+export async function createDealership(data: InsertDealership) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(dealerships).values(data).returning({ id: dealerships.id });
+  return result[0]?.id || 0;
+}
+
+export async function getDealerships() {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(dealerships)
+    .orderBy(desc(dealerships.createdAt));
+}
+
+export async function getDealershipById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(dealerships).where(eq(dealerships.id, id));
+  return result[0] || null;
+}
+
+export async function updateDealership(id: number, data: Partial<InsertDealership>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(dealerships).set(data).where(eq(dealerships.id, id));
+  return getDealershipById(id);
+}
+
+export async function deleteDealership(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(dealerships).where(eq(dealerships.id, id));
+}
+
+// European Dealerships (OSM Data)
+export async function getEuropeanDealerships(limit = 50, offset = 0, search = "") {
+  const db = await getDb();
+  if (!db) return [];
+
+  let query = db.select().from(europeanDealerships).limit(limit).offset(offset);
+
+  if (search) {
+    const searchPattern = `%${search}%`;
+    query = query.where(
+      sql`${europeanDealerships.name} ILIKE ${searchPattern} OR 
+          ${europeanDealerships.city} ILIKE ${searchPattern} OR 
+          ${europeanDealerships.country} ILIKE ${searchPattern}`
+    ) as any;
+  }
+
+  return query;
+}
+
+export async function getEuropeanDealershipById(id: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(europeanDealerships).where(eq(europeanDealerships.id, id));
+  return result[0] || null;
+}
+
+export async function createDealershipFromEuropean(europeanId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // 1. Get the European Dealership
+  const euroDealership = await getEuropeanDealershipById(europeanId);
+  if (!euroDealership) throw new Error("European Dealership not found");
+
+  // 2. Check if already imported (optional, based on osmId if desired, but for now just create)
+  // Check using osmId if available
+  if (euroDealership.osmId) {
+    const existing = await db.select().from(dealerships).where(eq(dealerships.osmId, euroDealership.osmId));
+    if (existing.length > 0) {
+      return existing[0].id; // Already imported
+    }
+  }
+
+  // 3. Insert into dealerships
+  const newDealership: InsertDealership = {
+    name: euroDealership.name,
+    address: euroDealership.address || undefined,
+    city: euroDealership.city || undefined,
+    country: euroDealership.country || undefined,
+    phone: euroDealership.phone || undefined,
+    website: euroDealership.website || undefined,
+    location_lat: euroDealership.latitude ? String(euroDealership.latitude) : undefined,
+    location_lng: euroDealership.longitude ? String(euroDealership.longitude) : undefined,
+    status: "pendiente", // Default to pending review
+    notes: `Importado de OSM (ID: ${euroDealership.osmId})`,
+    osmId: euroDealership.osmId || undefined,
+  };
+
+  const result = await db.insert(dealerships).values(newDealership).returning({ id: dealerships.id });
+  return result[0]?.id || 0;
+}
+

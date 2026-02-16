@@ -4,6 +4,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { analyzeCompanyWeaknesses, generateSalesStrategy } from "./services/company-analyzer";
+import { importLeadsFromNotebook } from "./scripts/import-leads";
 import * as db from "./db";
 
 export const appRouter = router({
@@ -83,6 +84,30 @@ export const appRouter = router({
       }),
   }),
 
+  importNotebookLeads: publicProcedure
+    .input(
+      z.object({
+        userId: z.number(),
+        leads: z.array(
+          z.object({
+            companyName: z.string(),
+            country: z.string(),
+            companyType: z.string(),
+            website: z.string().optional(),
+            opportunityScore: z.number(),
+            weaknesses: z.array(z.string()).optional(),
+            contactPerson: z.string().optional(),
+            notes: z.string().optional(),
+          })
+        ),
+      })
+    )
+    .mutation(async ({ input }) => {
+      await importLeadsFromNotebook(input.leads, input.userId);
+      return { success: true, count: input.leads.length };
+    }),
+
+
   activities: router({
     list: publicProcedure
       .input(z.object({ opportunityId: z.number() }))
@@ -114,6 +139,60 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await db.deleteActivity(input.id);
+        return { success: true };
+      }),
+  }),
+
+  dealerships: router({
+    list: publicProcedure.query(async () => {
+      return db.getDealerships();
+    }),
+
+    get: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return db.getDealershipById(input.id);
+      }),
+
+    create: publicProcedure
+      .input(
+        z.object({
+          name: z.string().min(1),
+          address: z.string().optional(),
+          city: z.string().optional(),
+          country: z.string().optional(),
+          phone: z.string().optional(),
+          website: z.string().optional(),
+          status: z.enum(["activo", "inactivo", "pendiente"]).optional(),
+          notes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        // @ts-ignore - status enum conflict possibility, but valid at runtime
+        return db.createDealership(input);
+      }),
+
+    update: publicProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          name: z.string().optional(),
+          address: z.string().optional(),
+          status: z.enum(["activo", "inactivo", "pendiente"]).optional(),
+          notes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        // @ts-ignore
+        await db.updateDealership(id, data);
+        return db.getDealershipById(id);
+      }),
+
+    delete: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteDealership(input.id);
         return { success: true };
       }),
   }),
@@ -158,6 +237,35 @@ export const appRouter = router({
           input.type,
           input.analysis
         );
+      }),
+  }),
+
+  europeanDealerships: router({
+    list: publicProcedure
+      .input(
+        z.object({
+          limit: z.number().min(1).max(100).default(50),
+          offset: z.number().min(0).default(0),
+          query: z.string().optional(),
+        })
+      )
+      .query(async ({ input }) => {
+        console.log("Fetching European Dealerships:", input);
+        const results = await db.getEuropeanDealerships(input.limit, input.offset, input.query);
+        console.log("European Dealerships Found:", results.length);
+        return results;
+      }),
+
+    get: publicProcedure
+      .input(z.object({ id: z.string() }))
+      .query(async ({ input }) => {
+        return db.getEuropeanDealershipById(input.id);
+      }),
+
+    import: publicProcedure
+      .input(z.object({ id: z.string() }))
+      .mutation(async ({ input }) => {
+        return db.createDealershipFromEuropean(input.id);
       }),
   }),
 });
